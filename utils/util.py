@@ -63,7 +63,8 @@ def evaluate(class_dict, test_df, preds, path:str=None, save_fig:bool=False, pat
 
     plot.plot(class_dict, tile_df, path, '_tile', save_fig)
 
-    tile_df_for_return = tile_df
+    tile_df_for_return = tile_df.copy()  # Make a copy to avoid modifying the original DataFrame
+
     if patient_based:
         # ---- patient-based ----
         tmp_df = tile_df.groupby('Patient_ID')
@@ -77,9 +78,9 @@ def evaluate(class_dict, test_df, preds, path:str=None, save_fig:bool=False, pat
 
         for k,v in df_patients.items():
             assert len(v.Patient_ID.unique()) == 1
-            patient_ids.append(v.Patient_ID[0])
+            patient_ids.append(v.Patient_ID.iloc[0])  # Using iloc to access the first element
             assert len(v.Label.unique()) == 1
-            labels.append(v.Label[0])
+            labels.append(v.Label.iloc[0])  # Using iloc to access the first element
 
             majority.append(v.Prediction.value_counts().idxmax())
             probability.append(v.Probability.sum() / len(v))
@@ -99,6 +100,61 @@ def evaluate(class_dict, test_df, preds, path:str=None, save_fig:bool=False, pat
     return tile_df_for_return
 
 
+# def evaluate(class_dict, test_df, preds, path:str=None, save_fig:bool=False, patient_based=True):
+#     # ---- tile-based ----
+#     keys = ['Patient_ID', 'Label', 'Prediction', 'Probability']
+#     values = [
+#         test_df.Patient_ID,
+#         test_df.Label.map(lambda x: class_dict.get(x)),
+#         np.argmax(preds, axis=1),
+#         [np.array(x) for x in preds]
+#     ]
+
+#     path_obj = Path(path) if path is not None else Path('.')
+#     tile_df = pd.DataFrame(dict(zip(keys, values)))
+
+#     # save stuff for outside plotting
+#     tile_df.to_csv(path_obj/"tile_df.csv", index=False)
+#     write_json(class_dict, path_obj/"class_mapping.json")
+
+#     plot.plot(class_dict, tile_df, path, '_tile', save_fig)
+
+#     tile_df_for_return = tile_df
+#     if patient_based:
+#         # ---- patient-based ----
+#         tmp_df = tile_df.groupby('Patient_ID')
+#         df_patients = {x: tmp_df.get_group(x).reset_index(drop=True) for x in tmp_df.groups.keys()}
+
+#         patient_ids = []
+#         labels = []
+#         majority = []
+#         probability = []
+#         prediction = []
+
+#         for k,v in df_patients.items():
+#             assert len(v.Patient_ID.unique()) == 1
+#             patient_ids.append(v.Patient_ID[0])
+#             assert len(v.Label.unique()) == 1
+#             labels.append(v.Label[0])
+
+#             majority.append(v.Prediction.value_counts().idxmax())
+#             probability.append(v.Probability.sum() / len(v))
+#             prediction.append(np.argmax(probability[-1]))
+
+#         d = {
+#             'Patient_ID': patient_ids,
+#             'Label': labels,
+#             'Majority_Decision':majority,
+#             'Probability': probability,
+#             'Prediction': prediction
+#         }
+#         patient_df = pd.DataFrame(d)
+#         patient_df.to_csv(path_obj/"patient_df.csv", index=False)
+#         plot.plot(class_dict, patient_df, path, '_patient', save_fig)
+
+#     return tile_df_for_return
+
+
 class MetricTracker:
     def __init__(self, *keys, writer = None):
         self.writer = writer
@@ -106,7 +162,8 @@ class MetricTracker:
         self.reset()
 
     def add_metric(self, *keys):
-        self._data = self._data.append(pd.DataFrame(data=0, index=keys, columns=self._data.columns))
+        self._data = pd.concat([self._data, pd.DataFrame(data=0, index=keys, columns=self._data.columns)])
+        # self._data = self._data.append(pd.DataFrame(data=0, index=keys, columns=self._data.columns))
 
     def reset(self):
         for col in self._data.columns:
